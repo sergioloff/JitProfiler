@@ -1,0 +1,54 @@
+﻿<Window x:Class="JitProfilerController.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:JitProfilerController"
+        mc:Ignorable="d"
+        Title="SIG JIT PROFILER" Height="450" Width="800">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Row for buttons, label, and textboxes -->
+            <RowDefinition Height="*"/>
+            <!-- Row for TabControl -->
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="btLaunchKill" Content="Launch" HorizontalAlignment="Left" Margin="47,38,0,0" VerticalAlignment="Top" Height="41" Width="78" Click="Button_Click"/>
+            <TextBox x:Name="TargetExec" HorizontalAlignment="Left" Margin="138,38,0,0" TextWrapping="Wrap" Text="C:\lixo\COM\ExampleProfiler-master\src\TestApplication\bin\x64\Debug\net8.0-windows\TestApplication.exe" VerticalAlignment="Top" Width="631" Grid.ColumnSpan="2"/>
+            <Button x:Name="ProfileControl" Content="Start Profiling" HorizontalAlignment="Left" Margin="47,122,0,0" VerticalAlignment="Top" Height="24" Width="722" RenderTransformOrigin="2.176,-1.003" IsEnabled="False" Click="ProfileControl_Click" Grid.ColumnSpan="2"/>
+            <TextBox x:Name="TargetExecArgs" HorizontalAlignment="Left" Margin="138,61,0,0" TextWrapping="Wrap" Text="-v -type = run etc etc" VerticalAlignment="Top" Width="631" Grid.ColumnSpan="2"/>
+            <Label Content="Output" HorizontalAlignment="Left" Margin="48,84,0,0" VerticalAlignment="Top"/>
+            <TextBox x:Name="OutFolder" HorizontalAlignment="Left" Margin="138,92,0,0" TextWrapping="Wrap" Text="C:\SigLocal\JitProfilerPlugin" VerticalAlignment="Top" Width="631" Grid.ColumnSpan="2"/>
+        </Grid>
+
+        <TabControl Grid.Row="1" Margin="10,10,10,10">
+            <TabItem Header="Output">
+                <TextBox
+                    x:Name="output" 
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Auto"
+                    AcceptsReturn="True"
+                    AcceptsTab="True"
+                    MinHeight="60"
+                    TextWrapping="NoWrap"/>
+            </TabItem>
+            <TabItem Header="Error Log">
+                <TextBox
+                    x:Name="errorLog" 
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Auto"
+                    AcceptsReturn="True"
+                    AcceptsTab="True"
+                    MinHeight="60"
+                    TextWrapping="NoWrap"/>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>

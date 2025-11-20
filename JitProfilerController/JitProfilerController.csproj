@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+	  <None Include="..\JitProfilerPlugin\Bin\$(Platform)\$(Configuration)\JitProfilerPlugin.dll" Link="JitProfilerPlugin.dll">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Include="..\JitProfilerPlugin\Bin\$(Platform)\$(Configuration)\JitProfilerPlugin.pdb" Link="JitProfilerPlugin.pdb">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\JitLogParser\JitLogParser.csproj" />
+  </ItemGroup>
+
+</Project>

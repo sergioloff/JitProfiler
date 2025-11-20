@@ -1,0 +1,51 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "JitProfilerPlugin", "JitProfilerPlugin\JitProfilerPlugin.vcxproj", "{12345678-1234-1234-1234-123456789012}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestApplication", "TestApplication\TestApplication.csproj", "{500DBD18-CB33-454C-9347-6B2E4E901BAE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JitProfilerController", "JitProfilerController\JitProfilerController.csproj", "{F7C897B4-5E98-47C8-9481-C523555954B4}"
+	ProjectSection(ProjectDependencies) = postProject
+		{12345678-1234-1234-1234-123456789012} = {12345678-1234-1234-1234-123456789012}
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JitLogParser", "JitLogParser\JitLogParser.csproj", "{E25DE03E-554D-4A41-823C-70F0D07B23B8}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JitLogParser.Tests", "JitLogParser.Tests\JitLogParser.Tests.csproj", "{ED58B83B-6962-497B-9F6C-0C8AB6E7ED54}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{12345678-1234-1234-1234-123456789012}.Debug|x64.ActiveCfg = Debug|x64
+		{12345678-1234-1234-1234-123456789012}.Debug|x64.Build.0 = Debug|x64
+		{12345678-1234-1234-1234-123456789012}.Release|x64.ActiveCfg = Release|x64
+		{12345678-1234-1234-1234-123456789012}.Release|x64.Build.0 = Release|x64
+		{500DBD18-CB33-454C-9347-6B2E4E901BAE}.Debug|x64.ActiveCfg = Debug|x64
+		{500DBD18-CB33-454C-9347-6B2E4E901BAE}.Release|x64.ActiveCfg = Release|x64
+		{500DBD18-CB33-454C-9347-6B2E4E901BAE}.Release|x64.Build.0 = Release|x64
+		{F7C897B4-5E98-47C8-9481-C523555954B4}.Debug|x64.ActiveCfg = Debug|x64
+		{F7C897B4-5E98-47C8-9481-C523555954B4}.Debug|x64.Build.0 = Debug|x64
+		{F7C897B4-5E98-47C8-9481-C523555954B4}.Release|x64.ActiveCfg = Release|x64
+		{F7C897B4-5E98-47C8-9481-C523555954B4}.Release|x64.Build.0 = Release|x64
+		{E25DE03E-554D-4A41-823C-70F0D07B23B8}.Debug|x64.ActiveCfg = Debug|x64
+		{E25DE03E-554D-4A41-823C-70F0D07B23B8}.Debug|x64.Build.0 = Debug|x64
+		{E25DE03E-554D-4A41-823C-70F0D07B23B8}.Release|x64.ActiveCfg = Release|x64
+		{E25DE03E-554D-4A41-823C-70F0D07B23B8}.Release|x64.Build.0 = Release|x64
+		{ED58B83B-6962-497B-9F6C-0C8AB6E7ED54}.Debug|x64.ActiveCfg = Debug|x64
+		{ED58B83B-6962-497B-9F6C-0C8AB6E7ED54}.Debug|x64.Build.0 = Debug|x64
+		{ED58B83B-6962-497B-9F6C-0C8AB6E7ED54}.Release|x64.ActiveCfg = Release|x64
+		{ED58B83B-6962-497B-9F6C-0C8AB6E7ED54}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F9F7D7EA-342F-45B5-BFE4-31BDE159785A}
+	EndGlobalSection
+EndGlobal
