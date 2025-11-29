@@ -1,14 +1,63 @@
 #include "JitProfilerPlugin.h"
 
-// Initialize static members
 CRITICAL_SECTION ProfilerLogger::g_jitLogLock;
 CRITICAL_SECTION ProfilerLogger::g_enter3LogLock;
 CRITICAL_SECTION ProfilerLogger::g_moduleLogLock;
+
+FILE* ProfilerLogger::g_jitLogFile = nullptr;
+FILE* ProfilerLogger::g_enter3LogFile = nullptr;
+FILE* ProfilerLogger::g_moduleLogFile = nullptr;
+
 bool ProfilerLogger::g_initialized = false;
 
 JitProfilerPlugin* JitProfilerPlugin::s_instance = nullptr;
+int JitProfilerPlugin::s_maxRecurseDepth = 20;
 
-// Global callback function for Enter3 - matches FunctionEnter3 signature
+bool ProfilerLogger::OpenLogFiles()
+{
+    std::wstring jitPath, enter3Path, modulePath;
+    wchar_t pathBuffer[1024];
+
+    GetLogPath(L"jit.json", pathBuffer, sizeof(pathBuffer) / sizeof(wchar_t));
+    jitPath = pathBuffer;
+
+    GetLogPath(L"enter3.json", pathBuffer, sizeof(pathBuffer) / sizeof(wchar_t));
+    enter3Path = pathBuffer;
+
+    GetLogPath(L"modules.json", pathBuffer, sizeof(pathBuffer) / sizeof(wchar_t));
+    modulePath = pathBuffer;
+
+    errno_t err_jit = _wfopen_s(&g_jitLogFile, jitPath.c_str(), L"w");
+    errno_t err_enter3 = _wfopen_s(&g_enter3LogFile, enter3Path.c_str(), L"w");
+    errno_t err_module = _wfopen_s(&g_moduleLogFile, modulePath.c_str(), L"w");
+
+    return (err_jit == 0) && (err_enter3 == 0) && (err_module == 0);
+}
+
+void ProfilerLogger::CloseLogFiles()
+{
+    if (g_jitLogFile != nullptr)
+    {
+        fflush(g_jitLogFile);
+        fclose(g_jitLogFile);
+        g_jitLogFile = nullptr;
+    }
+
+    if (g_enter3LogFile != nullptr)
+    {
+        fflush(g_enter3LogFile);
+        fclose(g_enter3LogFile);
+        g_enter3LogFile = nullptr;
+    }
+
+    if (g_moduleLogFile != nullptr)
+    {
+        fflush(g_moduleLogFile);
+        fclose(g_moduleLogFile);
+        g_moduleLogFile = nullptr;
+    }
+}
+
 void __stdcall GlobalEnter3Callback(FunctionIDOrClientID functionIDOrClientID, COR_PRF_ELT_INFO eltInfo)
 {
     JitProfilerPlugin* instance = JitProfilerPlugin::GetInstance();
@@ -39,12 +88,12 @@ JitProfilerPlugin::~JitProfilerPlugin()
         profilerInfo = NULL;
     }
 
-    // Clean up memory-mapped file
     if (pSharedFlag != nullptr)
     {
         UnmapViewOfFile((LPCVOID)pSharedFlag);
         pSharedFlag = nullptr;
     }
+
     if (hMapFile != NULL)
     {
         CloseHandle(hMapFile);
@@ -56,12 +105,24 @@ JitProfilerPlugin::~JitProfilerPlugin()
 
 bool JitProfilerPlugin::IsProfilingEnabled() const
 {
-    // If no shared flag is mapped, default to enabled
     if (pSharedFlag == nullptr)
         return true;
-
-    // Check if the flag is non-zero (enabled)
     return (*pSharedFlag != 0);
+}
+
+void JitProfilerPlugin::InitializeMaxRecurseDepth()
+{
+    s_maxRecurseDepth = 20;
+    DWORD envLen = GetEnvironmentVariableW(L"SIG_JIT_PROFILER_MAX_RECURSE", nullptr, 0);
+    if (envLen > 0) {
+        std::wstring buffer(envLen, L'\0');
+        if (GetEnvironmentVariableW(L"SIG_JIT_PROFILER_MAX_RECURSE", &buffer[0], envLen) > 0) {
+            int value = _wtoi(buffer.c_str());
+            if (value > 0) {
+                s_maxRecurseDepth = value;
+            }
+        }
+    }
 }
 
 HRESULT STDMETHODCALLTYPE JitProfilerPlugin::Initialize(IUnknown* pICorProfilerInfoUnk)
@@ -76,6 +137,8 @@ HRESULT STDMETHODCALLTYPE JitProfilerPlugin::Shutdown()
         profilerInfo->Release();
         profilerInfo = NULL;
     }
+
+    ProfilerLogger::CloseLogFiles();
     return S_OK;
 }
 
@@ -94,7 +157,11 @@ HRESULT STDMETHODCALLTYPE JitProfilerPlugin::InitializeForAttach(
     if (FAILED(hr))
         return hr;
 
-    // Set event mask to receive JIT and Enter/Leave events
+    if (profilerInfo == NULL)
+    {
+        return E_FAIL;
+    }
+
     DWORD eventMask =
         COR_PRF_MONITOR_JIT_COMPILATION |
         COR_PRF_MONITOR_ENTERLEAVE |
@@ -116,15 +183,16 @@ HRESULT STDMETHODCALLTYPE JitProfilerPlugin::InitializeForAttach(
         return hr;
     }
 
-    // Open memory-mapped file from environment variable
-    wchar_t mapName[512];
-    DWORD envLen = GetEnvironmentVariableW(L"SIG_JIT_PROFILER_MAP_ID", mapName, sizeof(mapName) / sizeof(wchar_t));
-    if (envLen == 0)
-    {
-        wcscpy_s(mapName, sizeof(mapName) / sizeof(wchar_t), L"SIG_JITPROFILER");
+    std::wstring mapName(L"SIG_JITPROFILER");
+    DWORD envLen = GetEnvironmentVariableW(L"SIG_JIT_PROFILER_MAP_ID", nullptr, 0);
+    if (envLen > 0) {
+        std::wstring buffer(envLen, L'\0');
+        if (GetEnvironmentVariableW(L"SIG_JIT_PROFILER_MAP_ID", &buffer[0], envLen) > 0) {
+            mapName = buffer.substr(0, wcsnlen_s(buffer.c_str(), buffer.size()));
+        }
     }
 
-    hMapFile = OpenFileMappingW(FILE_MAP_READ, FALSE, mapName);
+    hMapFile = OpenFileMappingW(FILE_MAP_READ, FALSE, mapName.c_str());
     if (hMapFile != NULL)
     {
         pSharedFlag = (volatile int32_t*)MapViewOfFile(hMapFile, FILE_MAP_READ, 0, 0, sizeof(int32_t));
@@ -149,10 +217,10 @@ HRESULT STDMETHODCALLTYPE JitProfilerPlugin::JITCompilationStarted(FunctionID fu
         LeaveCriticalSection(&jitLock);
         return S_OK;
     }
+
     jitLoggedFunctions.insert(functionId);
     LeaveCriticalSection(&jitLock);
 
-    // Log as JSON with numeric value
     ProfilerLogger::LogJIT(L"{\"FunctionID\":%llu}", (unsigned long long)functionId);
     return S_OK;
 }
@@ -185,6 +253,11 @@ TypeArgInfo JitProfilerPlugin::ResolveTypeArgument(ClassID classId)
     mdTypeDef typeDef;
     ClassID parentClassId;
     ULONG32 typeArgCount = 0;
+
+    if (profilerInfo == NULL)
+    {
+        return info;
+    }
 
     HRESULT hr = profilerInfo->GetClassIDInfo2(
         classId,
@@ -227,16 +300,26 @@ TypeArgInfo JitProfilerPlugin::ResolveTypeArgument(ClassID classId)
 
 void JitProfilerPlugin::LogModuleInfo(ModuleID moduleId)
 {
+    if (moduleLock.DebugInfo == NULL)
+    {
+        return;
+    }
+
     EnterCriticalSection(&moduleLock);
     if (moduleLoggedFunctions.find(moduleId) != moduleLoggedFunctions.end())
     {
         LeaveCriticalSection(&moduleLock);
         return;
     }
+
     moduleLoggedFunctions.insert(moduleId);
     LeaveCriticalSection(&moduleLock);
 
-    WCHAR moduleName[512];
+    if (profilerInfo == NULL)
+    {
+        return;
+    }
+
     ULONG moduleNameLen = 0;
     AssemblyID assemblyId;
     LPCBYTE baseLoadAddress;
@@ -244,35 +327,55 @@ void JitProfilerPlugin::LogModuleInfo(ModuleID moduleId)
     HRESULT hr = profilerInfo->GetModuleInfo(
         moduleId,
         &baseLoadAddress,
-        512,
+        0,
         &moduleNameLen,
-        moduleName,
-        &assemblyId
-    );
+        nullptr,
+        &assemblyId);
+
+    if (FAILED(hr) || moduleNameLen == 0)
+        return;
+
+    std::wstring moduleName(moduleNameLen, L'\0');
+    hr = profilerInfo->GetModuleInfo(
+        moduleId,
+        &baseLoadAddress,
+        moduleNameLen,
+        &moduleNameLen,
+        &moduleName[0],
+        &assemblyId);
 
     if (FAILED(hr))
         return;
 
-    WCHAR assemblyName[512];
     ULONG assemblyNameLen = 0;
     AppDomainID appDomainId;
     ModuleID manifestModuleId;
 
     hr = profilerInfo->GetAssemblyInfo(
         assemblyId,
-        512,
+        0,
         &assemblyNameLen,
-        assemblyName,
+        nullptr,
         &appDomainId,
-        &manifestModuleId
-    );
+        &manifestModuleId);
+
+    if (FAILED(hr) || assemblyNameLen == 0)
+        return;
+
+    std::wstring assemblyName(assemblyNameLen, L'\0');
+    hr = profilerInfo->GetAssemblyInfo(
+        assemblyId,
+        assemblyNameLen,
+        &assemblyNameLen,
+        &assemblyName[0],
+        &appDomainId,
+        &manifestModuleId);
 
     if (SUCCEEDED(hr))
     {
         std::wstring escapedModuleName = EscapeJson(moduleName);
         std::wstring escapedAssemblyName = EscapeJson(assemblyName);
 
-        // Log as JSON with numeric values for IDs
         ProfilerLogger::LogModule(
             L"{\"ModuleID\":%llu,\"ModuleName\":\"%s\",\"AssemblyID\":%llu,\"AssemblyName\":\"%s\"}",
             (unsigned long long)moduleId, escapedModuleName.c_str(),
@@ -280,23 +383,30 @@ void JitProfilerPlugin::LogModuleInfo(ModuleID moduleId)
     }
 }
 
-void JitProfilerPlugin::LogModuleMappingRecursive(const TypeArgInfo& typeArg)
+void JitProfilerPlugin::LogModuleMappingRecursive(const TypeArgInfo& typeArg, int currentDepth)
 {
+    if (currentDepth >= s_maxRecurseDepth) {
+        return;  
+    }
+
     LogModuleInfo(typeArg.moduleId);
     for (const auto& nested : typeArg.nestedTypeArgs)
     {
-        LogModuleMappingRecursive(nested);
+        LogModuleMappingRecursive(nested, currentDepth + 1);
     }
 }
 
-std::wstring JitProfilerPlugin::FormatTypeArgInfoJson(const TypeArgInfo& typeArg)
+std::wstring JitProfilerPlugin::FormatTypeArgInfoJson(const TypeArgInfo& typeArg, int currentDepth)
 {
     wchar_t buffer[512];
-    // Use numeric values instead of hex strings
     swprintf_s(buffer, 512, L"{\"ModuleID\":%llu,\"TypeDef\":%u,\"NestedCount\":%u",
         (unsigned long long)typeArg.moduleId, typeArg.typeDef, (unsigned int)typeArg.nestedTypeArgs.size());
-
     std::wstring result = buffer;
+
+    if (currentDepth >= s_maxRecurseDepth) {
+        result += L"}";
+        return result;
+    }
 
     if (!typeArg.nestedTypeArgs.empty())
     {
@@ -304,7 +414,7 @@ std::wstring JitProfilerPlugin::FormatTypeArgInfoJson(const TypeArgInfo& typeArg
         for (size_t i = 0; i < typeArg.nestedTypeArgs.size(); i++)
         {
             if (i > 0) result += L",";
-            result += FormatTypeArgInfoJson(typeArg.nestedTypeArgs[i]);
+            result += FormatTypeArgInfoJson(typeArg.nestedTypeArgs[i], currentDepth + 1);
         }
         result += L"]";
     }
@@ -318,6 +428,11 @@ void JitProfilerPlugin::HandleEnter3(FunctionIDOrClientID functionIDOrClientID, 
     if (!IsProfilingEnabled())
         return;
 
+    if (profilerInfo == NULL)
+    {
+        return;
+    }
+
     FunctionID functionId = functionIDOrClientID.functionID;
 
     EnterCriticalSection(&enter3Lock);
@@ -326,6 +441,7 @@ void JitProfilerPlugin::HandleEnter3(FunctionIDOrClientID functionIDOrClientID, 
         LeaveCriticalSection(&enter3Lock);
         return;
     }
+
     enter3LoggedFunctions.insert(functionId);
     LeaveCriticalSection(&enter3Lock);
 
@@ -426,15 +542,14 @@ void JitProfilerPlugin::HandleEnter3(FunctionIDOrClientID functionIDOrClientID, 
 
     for (const auto& typeArg : resolvedDeclaringTypeArgs)
     {
-        LogModuleMappingRecursive(typeArg);
+        LogModuleMappingRecursive(typeArg, 0);
     }
 
     for (const auto& typeArg : resolvedMethodTypeArgs)
     {
-        LogModuleMappingRecursive(typeArg);
+        LogModuleMappingRecursive(typeArg, 0);
     }
 
-    // Build JSON string with numeric values
     wchar_t buffer[256];
     std::wstring json = L"{";
 
@@ -462,7 +577,7 @@ void JitProfilerPlugin::HandleEnter3(FunctionIDOrClientID functionIDOrClientID, 
         for (size_t i = 0; i < resolvedDeclaringTypeArgs.size(); i++)
         {
             if (i > 0) json += L",";
-            json += FormatTypeArgInfoJson(resolvedDeclaringTypeArgs[i]);
+            json += FormatTypeArgInfoJson(resolvedDeclaringTypeArgs[i], 0);
         }
         json += L"]";
     }
@@ -476,12 +591,11 @@ void JitProfilerPlugin::HandleEnter3(FunctionIDOrClientID functionIDOrClientID, 
         for (size_t i = 0; i < resolvedMethodTypeArgs.size(); i++)
         {
             if (i > 0) json += L",";
-            json += FormatTypeArgInfoJson(resolvedMethodTypeArgs[i]);
+            json += FormatTypeArgInfoJson(resolvedMethodTypeArgs[i], 0);
         }
         json += L"]";
     }
 
     json += L"}";
-
     ProfilerLogger::LogEnter3(L"%s", json.c_str());
 }
